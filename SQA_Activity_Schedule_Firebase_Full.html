@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Security Quality Assurance - Activity Schedule Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
+<style>
+:root{
+  --bg:#f4f7fb; --card:#fff; --text:#1f2937; --muted:#6b7280; --line:#d7dee8;
+  --blue:#0f4c81; --blue2:#1769aa; --red:#dc2626; --green:#16a34a; --orange:#f97316;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+header{background:linear-gradient(135deg,var(--blue),#06283d);color:white;padding:20px}
+header h1{margin:0;font-size:24px}
+header p{margin:6px 0 0;color:#dbeafe}
+.container{padding:18px;max-width:1500px;margin:auto}
+.toolbar,.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px;box-shadow:0 4px 12px rgba(0,0,0,.05)}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,input,select,textarea{font:inherit}
+button{border:0;border-radius:9px;padding:9px 12px;background:var(--blue);color:white;cursor:pointer}
+button:hover{background:var(--blue2)}
+.btn-red{background:#b91c1c}.btn-green{background:#15803d}.btn-gray{background:#4b5563}.btn-orange{background:#c2410c}
+input[type=text],input[type=url],select,textarea{border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff}
+textarea{width:100%;min-height:42px;resize:vertical}
+.area-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.kpi{padding:14px;border-radius:14px;background:#f8fafc;border:1px solid var(--line)}
+.kpi .num{font-size:30px;font-weight:bold;color:var(--blue)}
+.kpi .label{color:var(--muted);font-size:13px}
+.area-card{border:1px solid var(--line);border-radius:14px;background:#fff;margin-bottom:18px;overflow:hidden}
+.area-head{display:flex;justify-content:space-between;gap:10px;align-items:center;background:#eaf3fb;padding:12px 14px;border-bottom:1px solid var(--line)}
+.area-head h2{margin:0;font-size:18px}
+.badge{border-radius:999px;padding:5px 10px;background:#fff;border:1px solid var(--line);font-weight:bold}
+.blink{animation:blink 1s infinite;background:#fee2e2;color:#991b1b;border-color:#ef4444}
+@keyframes blink{50%{opacity:.25}}
+.section{padding:12px 14px;border-bottom:1px dashed var(--line)}
+.section h3{margin:0 0 10px;font-size:16px;color:#0f4c81}
+.table-wrap{overflow:auto}
+table{border-collapse:collapse;width:100%;min-width:740px;background:white}
+th,td{border:1px solid var(--line);padding:7px;vertical-align:top}
+th{background:#f1f5f9;text-align:left;font-size:13px}
+td.actions{white-space:nowrap;width:150px}
+.small{font-size:12px;color:var(--muted)}
+.total-line{margin-top:8px;font-weight:bold}
+.low{background:#d9f99d!important}.medium-low{background:#86efac!important}.medium{background:#fde68a!important}.medium-high{background:#fdba74!important}.high{background:#b91c1c!important;color:white!important}
+.hidden{display:none}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.tab{background:#e5e7eb;color:#111827}.tab.active{background:var(--blue);color:white}
+#dashboardTable td:nth-child(n+2),#dashboardTable th:nth-child(n+2){text-align:center}
+
+.print-only{display:none}
+@media print{
+  body{background:white}
+  header,.toolbar,.tabs,.no-print,button{display:none!important}
+  .area-card{display:block!important;box-shadow:none;border:0}
+  .section{page-break-after:always;border:0}
+  .print-only{display:block}
+}
+
+.login-bg{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  background:
+    radial-gradient(circle at top left, rgba(23,105,170,.35), transparent 35%),
+    radial-gradient(circle at bottom right, rgba(15,76,129,.25), transparent 38%),
+    linear-gradient(135deg,#071a2d,#0f4c81 55%,#06283d);
+}
+.login-card{
+  width:420px;
+  max-width:100%;
+  background:rgba(255,255,255,.96);
+  backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,.55);
+  border-radius:24px;
+  padding:26px;
+  box-shadow:0 24px 70px rgba(0,0,0,.28);
+}
+.login-logo{
+  width:62px;height:62px;border-radius:18px;
+  background:linear-gradient(135deg,#0f4c81,#38bdf8);
+  display:flex;align-items:center;justify-content:center;
+  color:white;font-size:30px;font-weight:bold;margin-bottom:14px;
+}
+.login-card h1{margin:0;font-size:25px;color:#0f172a}
+.login-card p{margin:8px 0 18px;color:#64748b}
+.login-card label{font-size:13px;font-weight:bold;color:#334155}
+.login-card input,.login-card select{
+  width:100%;
+  margin:6px 0 13px;
+  padding:12px 13px;
+  border-radius:12px;
+  border:1px solid #cbd5e1;
+  background:#f8fafc;
+}
+.login-actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:4px}
+.login-primary{padding:12px;border-radius:12px;font-weight:bold;background:#0f4c81}
+.login-viewer{padding:12px;border-radius:12px;font-weight:bold;background:#334155}
+.login-footer{margin-top:14px;text-align:center;font-size:12px;color:#64748b}
+
+
+.login-marquee{
+  margin-top:18px;
+  overflow:hidden;
+  white-space:nowrap;
+  border-top:1px solid #e2e8f0;
+  padding-top:12px;
+  color:#0f4c81;
+  font-weight:bold;
+}
+.login-marquee span{
+  display:inline-block;
+  padding-left:100%;
+  animation:marquee 10s linear infinite;
+}
+@keyframes marquee{
+  0%{transform:translateX(0)}
+  100%{transform:translateX(-100%)}
+}
+.top-actions{
+  margin-top:12px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+@media print{
+  .section{page-break-after:auto!important;break-after:auto!important;page-break-inside:auto}
+  .area-card{page-break-after:always;break-after:page}
+  .area-card .section{page-break-inside:auto;break-inside:auto}
+  tr,td,th{page-break-inside:avoid;break-inside:avoid}
+  table{min-width:0!important;font-size:11px}
+  th,td{padding:5px}
+  textarea,input,select{border:0!important;background:transparent!important;padding:0!important}
+  .actions,.admin-only,.top-actions,.toolbar,.tabs,header button{display:none!important}
+}
+
+</style>
+</head>
+<body>
+<div id="loginScreen" class="login-bg">
+  <div class="login-card">
+    <div class="login-logo">QA</div>
+    <h1>Security Quality Assurance</h1>
+    <p>Activity Schedule Dashboard</p>
+
+    <label>Year</label>
+    <select id="loginYear"></select>
+
+    <div id="adminLoginBox">
+      <label>Admin User Name</label>
+      <input id="loginUser" type="text" placeholder="QAUNIT">
+      <label>Admin Password</label>
+      <input id="loginPass" type="password" placeholder="Password">
+    </div>
+
+    <div class="login-actions">
+      <button class="login-primary" onclick="loginAdmin()">Login as Admin</button>
+      <button class="login-viewer" onclick="loginViewer()">Login as Viewer</button>
+    </div>
+
+    <div class="login-footer">Viewer mode opens read-only data for selected year.</div>
+    <div class="login-marquee"><span>Developed By Security Quality Assurance Unit</span></div>
+  </div>
+</div>
+<div id="appScreen" class="hidden">
+<header>
+  <h1>Security Quality Assurance - Activity Schedule Dashboard</h1>
+  <p>Security Quality Assurance Activity Schedule</p>
+  <div class="top-actions no-print"><button onclick="logout()" class="btn-red">Logout</button><button onclick="switchUser()" class="btn-gray">Switch User</button></div>
+</header>
+
+<div class="container">
+  <div class="toolbar">
+    <span class="small"><b>Year:</b></span>
+    <select id="yearSelect" onchange="changeYear()"></select>
+    <button onclick="printAreaPdf()">Print Current Area PDF</button>
+    <button onclick="printAllPdf()">Print All Areas PDF</button>
+  </div>
+
+  <div class="toolbar admin-only">
+    <button onclick="saveLocal()" class="btn-green">Save Local</button>
+    <button onclick="loadLocal()">Load Local</button>
+    <button onclick="exportExcel()" class="btn-green">Export to Excel</button>
+    <button onclick="exportTemplate()" class="btn-orange">Export Excel Template</button>
+    <label><input type="file" id="excelFile" accept=".xlsx,.xls" onchange="importExcel(event)" hidden><button onclick="document.getElementById('excelFile').click()">Load from Excel</button></label>
+    <button onclick="clearAll()" class="btn-red">Clear All</button>
+  </div>
+
+  <div class="toolbar admin-only">
+    <button onclick="saveFirebase(true)" class="btn-green">Save Now</button>
+    <button onclick="loadFirebase(true)">Load Now</button>
+    <span class="small" id="syncStatus"><b>Firebase:</b> Ready</span>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Dashboard</h2>
+    <div class="area-grid">
+      <div class="kpi"><div class="num" id="highestAreas">-</div><div class="label">Consider Area(s)</div></div>
+    </div>
+    <br>
+    <div class="table-wrap">
+      <table id="dashboardTable">
+        <thead><tr><th>Area</th><th>Findings Value</th><th>Incident Total</th><th>Info Total</th><th>Other Total</th><th>Area Total</th><th>Alert</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+  <div id="areas"></div>
+</div>
+
+<script>
+const AREA_LIST = [
+ ["Training of Personal","TRP"],["Certification Of Personal","CEP"],["Access Permits - Control Area","APC"],
+ ["Access Control","ACC"],["SRA / Tennent Area","SRA"],["Transfer Baggage","TRB"],
+ ["Hold Baggage Protection","HBP"],["Passenger & Cabin Baggage","PAX"],["Aircraft Security","ACS"],
+ ["Cargo & Mail","C&M"],["Catering","CTG"],["Local Station Audits","LA"],["Overseas Audits","OA"],["Contingency Plan","CNG"]
+];
+const findingScoreMap = {
+ "CAT 3":1,
+ "CAT 4":2
+};
+const severityMap = {
+ "Nil":{score:0, cls:""},
+ "Low":{score:1, cls:"low"},
+ "Medium-Low":{score:2, cls:"medium-low"},
+ "Medium":{score:3, cls:"medium"},
+ "Medium-High":{score:4, cls:"medium-high"},
+ "High":{score:5, cls:"high"}
+};
+
+// Firebase config paste karanna me object ekata.
+// Firebase Console > Project settings > Your apps > Web app config.
+const firebaseConfig = {
+  apiKey: "AIzaSyBiQZJwfyoaXzDwrV55g4OsIfY_Z_VqlV8",
+  authDomain: "activity-schedule-dashboard.firebaseapp.com",
+  projectId: "activity-schedule-dashboard",
+  storageBucket: "activity-schedule-dashboard.firebasestorage.app",
+  messagingSenderId: "910455128787",
+  appId: "1:910455128787:web:c250434b338dac45218a26",
+  measurementId: "G-Y2YN2DTF9N"
+};
+let db = null;
+let firebaseReady = false;
+let isLoadingRemote = false;
+let autoSaveTimer = null;
+let lastAutoSaveJSON = "";
+
+let data = {};
+let activeArea = AREA_LIST[0][1];
+let alertSettings = {};
+let currentYear = new Date().getFullYear();
+let userRole = null;
+
+
+function setSyncStatus(msg){
+ const el=document.getElementById("syncStatus");
+ if(el) el.innerHTML = "<b>Firebase:</b> " + escapeHtml(msg);
+}
+function setupFirebase(){
+ if(firebaseReady) return true;
+ if(!firebaseConfig.projectId || firebaseConfig.projectId.includes("PASTE_")){
+  setSyncStatus("Config not added yet");
+  return false;
+ }
+ try{
+  if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  try{ if(firebase.analytics) firebase.analytics(); }catch(e){}
+  db = firebase.firestore();
+  firebaseReady = true;
+  setSyncStatus("Connected");
+  return true;
+ }catch(err){
+  console.error(err);
+  setSyncStatus("Connection error - " + (err.message || err));
+  return false;
+ }
+}
+function firebaseDocRef(){
+ return db.collection("sqa_activity_schedule").doc(String(currentYear));
+}
+async function loadFirebase(showMsg=false){
+ if(!setupFirebase()) return;
+ try{
+  isLoadingRemote = true;
+  setSyncStatus("Loading " + currentYear + "...");
+  const snap = await firebaseDocRef().get();
+  if(snap.exists){
+   const obj = snap.data() || {};
+   data = obj.data || {};
+   alertSettings = obj.alertSettings || {};
+   init();
+   setSyncStatus("Loaded " + currentYear);
+   if(showMsg) alert("Loaded from Firebase");
+  }else{
+   data = {};
+   alertSettings = {};
+   init();
+   setSyncStatus("No saved data for " + currentYear + " yet");
+   if(showMsg) alert("No Firebase data found for this year");
+  }
+  lastAutoSaveJSON = JSON.stringify({year:currentYear,data,alertSettings});
+ }catch(err){
+  console.error(err);
+  setSyncStatus("Load error - " + (err.message || err));
+  if(showMsg) alert("Firebase load error: " + (err.message || err));
+ }finally{
+  isLoadingRemote = false;
+  applyRole();
+ }
+}
+async function saveFirebase(showMsg=false){
+ if(!setupFirebase()) return;
+ if(userRole!=="admin") return;
+ try{
+  setSyncStatus("Saving " + currentYear + "...");
+  await firebaseDocRef().set({
+   year: currentYear,
+   data,
+   alertSettings,
+   updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, {merge:true});
+  lastAutoSaveJSON = JSON.stringify({year:currentYear,data,alertSettings});
+  setSyncStatus("Saved " + new Date().toLocaleTimeString());
+  if(showMsg) alert("Saved to Firebase");
+ }catch(err){
+  console.error(err);
+  setSyncStatus("Save error - " + (err.message || err));
+  if(showMsg) alert("Firebase save error: " + (err.message || err));
+ }
+}
+function scheduleAutoSave(){
+ if(userRole!=="admin" || isLoadingRemote || !firebaseReady) return;
+ const nowJSON = JSON.stringify({year:currentYear,data,alertSettings});
+ if(nowJSON===lastAutoSaveJSON) return;
+ clearTimeout(autoSaveTimer);
+ autoSaveTimer = setTimeout(()=>saveFirebase(false), 900);
+}
+
+function setupYears(){
+ if(currentYear<2025 || currentYear>2100) currentYear=2025;
+ ["loginYear","yearSelect"].forEach(id=>{
+  const y=document.getElementById(id); if(!y)return;
+  y.innerHTML="";
+  for(let i=2025;i<=2100;i++){ y.innerHTML += `<option value="${i}">${i}</option>`; }
+  y.value=currentYear;
+ });
+}
+async function enterApp(role){
+ userRole=role;
+ currentYear=parseInt(document.getElementById("loginYear").value);
+ document.getElementById("loginScreen").style.display="none";
+ document.getElementById("appScreen").classList.remove("hidden");
+ setupYears();
+ init();
+ applyRole();
+ await loadFirebase(false);
+}
+function loginAdmin(){
+ const u=document.getElementById("loginUser").value.trim();
+ const pw=document.getElementById("loginPass").value;
+ if(u==="QAUNIT" && pw==="Airbus@24"){ enterApp("admin"); }
+ else { alert("Invalid admin login"); }
+}
+function loginViewer(){
+ enterApp("viewer");
+}
+function logout(){
+ userRole=null;
+ data={};
+ alertSettings={};
+ document.getElementById("appScreen").classList.add("hidden");
+ document.getElementById("loginScreen").style.display="flex";
+ document.getElementById("loginUser").value="";
+ document.getElementById("loginPass").value="";
+ setupYears();
+}
+function switchUser(){
+ logout();
+}
+function applyRole(){
+ const isViewer = userRole==="viewer";
+ document.querySelectorAll(".admin-only").forEach(el=>el.style.display=isViewer?"none":"");
+ document.querySelectorAll("input,select,textarea").forEach(el=>{
+   if(el.id==="loginUser"||el.id==="loginPass") return;
+   if(el.id==="yearSelect"){ el.disabled=false; return; }
+   el.disabled=isViewer;
+ });
+}
+async function changeYear(){
+ currentYear = parseInt(document.getElementById("yearSelect").value);
+ const ly=document.getElementById("loginYear"); if(ly) ly.value=currentYear;
+ data={}; alertSettings={}; init();
+ await loadFirebase(false);
+}
+function printAreaPdf(){
+ const oldTitle=document.title;
+ document.title="SQA Activity Schedule - "+activeArea+" - "+currentYear;
+ document.querySelectorAll(".area-card").forEach(card=>card.style.display="none");
+ const card=document.getElementById("area_"+activeArea);
+ if(card) card.style.display="block";
+ window.print();
+ document.title=oldTitle;
+ renderAreas();
+}
+function printAllPdf(){
+ const oldTitle=document.title;
+ document.title="SQA Activity Schedule - All Areas - "+currentYear;
+ document.querySelectorAll(".area-card").forEach(card=>card.style.display="block");
+ window.print();
+ document.title=oldTitle;
+ renderAreas();
+}
+function blankArea(){ return {findings:[{cat:"CAT 3",qty:0},{cat:"CAT 4",qty:0}], incidents:[{serial:1,incident:"",severity:"Nil"}], infos:[{serial:1,description:""}], others:[{serial:1,description:""}]}; }
+function init(){
+ AREA_LIST.forEach(([name,code])=>{ if(!data[code]) data[code]=blankArea(); if(data[code].others===undefined)data[code].others=[{serial:1,description:""}]; if(alertSettings[code]===undefined) alertSettings[code]=true; });
+ renderTabs(); renderAreas(); updateAll();
+}
+function renderTabs(){
+ const tabs=document.getElementById("tabs"); tabs.innerHTML="";
+ AREA_LIST.forEach(([name,code])=>{
+  const b=document.createElement("button"); b.className="tab"+(code===activeArea?" active":""); b.textContent=`${code}`;
+  b.onclick=()=>{activeArea=code;renderTabs();renderAreas();}; tabs.appendChild(b);
+ });
+}
+function renderAreas(){
+ const wrap=document.getElementById("areas"); wrap.innerHTML="";
+ AREA_LIST.forEach(([name,code])=>{
+  const div=document.createElement("div"); div.className="area-card"; div.id="area_"+code; div.style.display=(code===activeArea?"block":"none");
+  div.innerHTML = `
+   <div class="area-head"><h2>${name} (${code})</h2><span class="badge" id="badge_${code}">Total: 0</span></div>
+   <div class="section">
+    <h3>1. Findings</h3>
+    <div class="table-wrap"><table><thead><tr><th>Category</th><th>Finding Count (1-100)</th><th>Score</th><th>Action</th></tr></thead><tbody id="find_${code}"></tbody></table></div>
+    <button class="admin-only" onclick="addFinding('${code}')">Add Row</button>
+    <div class="total-line">Findings Value: <span id="findTotal_${code}">0</span></div>
+   </div>
+   <div class="section">
+    <h3>2. Incident / Severity</h3>
+    <div class="table-wrap"><table><thead><tr><th>Serial No</th><th>Incident</th><th>Severity</th><th>Score</th><th>Action</th></tr></thead><tbody id="inc_${code}"></tbody></table></div>
+    <button class="admin-only" onclick="addIncident('${code}')">Add Row</button>
+    <div class="total-line">Incident Total Score: <span id="incTotal_${code}">0</span></div>
+   </div>
+   <div class="section">
+    <h3>3. Security Information / Regulatory Update</h3>
+    <div class="table-wrap"><table><thead><tr><th>Serial Number</th><th>Description</th><th>Action</th></tr></thead><tbody id="info_${code}"></tbody></table></div>
+    <button class="admin-only" onclick="addInfo('${code}')">Add Row</button>
+    <div class="total-line">Information Total: <span id="infoTotal_${code}">0</span></div>
+   </div>
+   <div class="section">
+    <h3>4. Other</h3>
+    <div class="table-wrap"><table><thead><tr><th>Serial Number</th><th>Description</th><th>Action</th></tr></thead><tbody id="other_${code}"></tbody></table></div>
+    <button class="admin-only" onclick="addOther('${code}')">Add Row</button>
+    <div class="total-line">Other Total: <span id="otherTotal_${code}">0</span></div>
+   </div>`;
+  wrap.appendChild(div); renderAreaRows(code);
+ });
+}
+function renderAreaRows(code){
+ const f=document.getElementById("find_"+code); f.innerHTML="";
+ data[code].findings.forEach((r,i)=>{
+  const fs = findingScoreMap[r.cat] || 0;
+  f.innerHTML += `<tr><td><select onchange="data['${code}'].findings[${i}].cat=this.value;renderAreas();updateAll()"><option ${r.cat==="CAT 3"?"selected":""}>CAT 3</option><option ${r.cat==="CAT 4"?"selected":""}>CAT 4</option></select></td><td><input type="number" min="0" max="100" value="${r.qty||0}" onchange="data['${code}'].findings[${i}].qty=limit100(this.value);this.value=data['${code}'].findings[${i}].qty;updateAll()"></td><td>${fs}</td><td class="actions admin-only"><button class="btn-red" onclick="delRow('${code}','findings',${i})">Delete</button></td></tr>`;
+ });
+ const inc=document.getElementById("inc_"+code); inc.innerHTML="";
+ data[code].incidents.forEach((r,i)=>{
+  const s=severityMap[r.severity]||severityMap.Nil;
+  inc.innerHTML += `<tr class="${s.cls}"><td><input type="number" value="${r.serial||i+1}" onchange="data['${code}'].incidents[${i}].serial=this.value"></td><td><textarea oninput="data['${code}'].incidents[${i}].incident=this.value">${escapeHtml(r.incident||"")}</textarea></td><td><select onchange="data['${code}'].incidents[${i}].severity=this.value;renderAreas();updateAll()">${Object.keys(severityMap).map(x=>`<option ${r.severity===x?"selected":""}>${x}</option>`).join("")}</select></td><td>${s.score}</td><td class="actions admin-only"><button class="btn-red" onclick="delRow('${code}','incidents',${i})">Delete</button></td></tr>`;
+ });
+ const inf=document.getElementById("info_"+code); inf.innerHTML="";
+ data[code].infos.forEach((r,i)=>{ inf.innerHTML += `<tr><td><input type="number" value="${r.serial||i+1}" onchange="data['${code}'].infos[${i}].serial=this.value"></td><td><textarea oninput="data['${code}'].infos[${i}].description=this.value;updateAll()">${escapeHtml(r.description||"")}</textarea></td><td class="actions admin-only"><button class="btn-red" onclick="delRow('${code}','infos',${i})">Delete</button></td></tr>`; });
+ const oth=document.getElementById("other_"+code); oth.innerHTML="";
+ data[code].others.forEach((r,i)=>{ oth.innerHTML += `<tr><td><input type="number" value="${r.serial||i+1}" onchange="data['${code}'].others[${i}].serial=this.value"></td><td><textarea oninput="data['${code}'].others[${i}].description=this.value;updateAll()">${escapeHtml(r.description||"")}</textarea></td><td class="actions admin-only"><button class="btn-red" onclick="delRow('${code}','others',${i})">Delete</button></td></tr>`; });
+}
+function limit100(v){v=parseInt(v||0); if(v<0)v=0;if(v>100)v=100;return v;}
+function addFinding(c){data[c].findings.push({cat:"CAT 3",qty:0});renderAreas();updateAll();}
+function addIncident(c){data[c].incidents.push({serial:data[c].incidents.length+1,incident:"",severity:"Nil"});renderAreas();updateAll();}
+function addInfo(c){data[c].infos.push({serial:data[c].infos.length+1,description:""});renderAreas();updateAll();}
+function addOther(c){data[c].others.push({serial:data[c].others.length+1,description:""});renderAreas();updateAll();}
+function delRow(c,t,i){data[c][t].splice(i,1); if(data[c][t].length===0){ if(t==="findings")addFinding(c); if(t==="incidents")addIncident(c); if(t==="infos")addInfo(c); if(t==="others")addOther(c);} renderAreas();updateAll();}
+function totals(c){
+ const findings=data[c].findings.reduce((a,r)=>a+((+r.qty||0)*(findingScoreMap[r.cat]||0)),0);
+ const incidents=data[c].incidents.reduce((a,r)=>a+(severityMap[r.severity]?.score||0),0);
+ const infos=data[c].infos.filter(r=>(r.description||"").trim()).length;
+ const others=data[c].others.filter(r=>(r.description||"").trim()).length;
+ return {findings,incidents,infos,others,total:findings+incidents+infos+others};
+}
+function toggleAlert(c){
+ alertSettings[c]=!alertSettings[c];
+ saveLocal(false);
+ updateAll();
+}
+function updateAll(){
+ let grand=0, high=0, considerCodes=[];
+ const body=document.querySelector("#dashboardTable tbody"); body.innerHTML="";
+ AREA_LIST.forEach(([name,c])=>{
+  const t=totals(c); grand+=t.total; if(t.total>high) high=t.total;
+  if(t.total>15 && alertSettings[c]) considerCodes.push(c);
+ });
+ AREA_LIST.forEach(([name,c])=>{
+  const t=totals(c);
+  if(document.getElementById("findTotal_"+c)){
+   document.getElementById("findTotal_"+c).textContent=t.findings;
+   document.getElementById("incTotal_"+c).textContent=t.incidents;
+   document.getElementById("infoTotal_"+c).textContent=t.infos;
+   document.getElementById("otherTotal_"+c).textContent=t.others;
+   document.getElementById("badge_"+c).textContent="Total: "+t.total;
+   document.getElementById("badge_"+c).className="badge "+(t.total>15 && alertSettings[c]?"blink":"");
+  }
+  const isConsider = t.total>15 && alertSettings[c];
+  body.innerHTML += `<tr>
+   <td>${name} (${c})</td>
+   <td>${t.findings}</td><td>${t.incidents}</td><td>${t.infos}</td><td>${t.others}</td>
+   <td><b>${t.total}</b></td>
+   <td>
+    ${isConsider?'<span class="badge blink">🔴 Consider</span>':""}
+    <button class="admin-only ${alertSettings[c]?'btn-green':'btn-gray'}" onclick="toggleAlert('${c}')">${alertSettings[c]?'Alert ON':'Alert OFF'}</button>
+   </td></tr>`;
+ });
+ document.getElementById("highestAreas").textContent=considerCodes.join(", ")||"-";
+ applyRole();
+ scheduleAutoSave();
+}
+function saveLocal(showMsg=true){localStorage.setItem("sqa_activity_data_"+currentYear,JSON.stringify({data,alertSettings})); if(showMsg) alert("Saved locally");}
+function loadLocal(){const x=localStorage.getItem("sqa_activity_data_"+currentYear); if(x){const obj=JSON.parse(x); if(obj.data){data=obj.data; alertSettings=obj.alertSettings||{};} else {data=obj;} init();alert("Loaded locally");}}
+function clearAll(){if(confirm("Clear all data?")){data={};init();}}
+function rowsForExcel(){
+ const rows=[]; AREA_LIST.forEach(([name,c])=>{
+  data[c].findings.forEach(r=>rows.push({Area:name,Code:c,Table:"Findings",Category:r.cat,Qty:r.qty,Serial:"",Incident:"",Severity:"",Score:findingScoreMap[r.cat]||0,Description:""}));
+  data[c].incidents.forEach(r=>rows.push({Area:name,Code:c,Table:"Incidents",Category:"",Qty:"",Serial:r.serial,Incident:r.incident,Severity:r.severity,Score:severityMap[r.severity]?.score||"",Description:""}));
+  data[c].infos.forEach(r=>rows.push({Area:name,Code:c,Table:"Information",Category:"",Qty:"",Serial:r.serial,Incident:"",Severity:"",Score:"",Description:r.description}));
+  data[c].others.forEach(r=>rows.push({Area:name,Code:c,Table:"Other",Category:"",Qty:"",Serial:r.serial,Incident:"",Severity:"",Score:"",Description:r.description}));
+ }); return rows;
+}
+function exportExcel(){const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rowsForExcel()),"SQA Data");XLSX.writeFile(wb,"SQA_Activity_Schedule.xlsx");}
+function exportTemplate(){const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rowsForExcel().map(r=>({...r,Qty:"",Incident:"",Description:""}))),"Template");XLSX.writeFile(wb,"SQA_Activity_Template.xlsx");}
+function importExcel(e){
+ const file=e.target.files[0]; if(!file)return; const reader=new FileReader();
+ reader.onload=evt=>{const wb=XLSX.read(evt.target.result,{type:"binary"}); const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+ data={}; AREA_LIST.forEach(([n,c])=>data[c]={findings:[],incidents:[],infos:[],others:[]});
+ rows.forEach(r=>{const c=r.Code; if(!data[c])return; if(r.Table==="Findings")data[c].findings.push({cat:r.Category||"CAT 3",qty:+r.Qty||0}); if(r.Table==="Incidents")data[c].incidents.push({serial:r.Serial||data[c].incidents.length+1,incident:r.Incident||"",severity:r.Severity||"Nil"}); if(r.Table==="Information")data[c].infos.push({serial:r.Serial||data[c].infos.length+1,description:r.Description||""}); if(r.Table==="Other")data[c].others.push({serial:r.Serial||data[c].others.length+1,description:r.Description||""});});
+ AREA_LIST.forEach(([n,c])=>{if(!data[c].findings.length)data[c].findings=[{cat:"CAT 3",qty:0},{cat:"CAT 4",qty:0}]; if(!data[c].incidents.length)data[c].incidents=[{serial:1,incident:"",severity:"Nil"}]; if(!data[c].infos.length)data[c].infos=[{serial:1,description:""}]; if(!data[c].others.length)data[c].others=[{serial:1,description:""}];});
+ init(); alert("Excel loaded");};
+ reader.readAsBinaryString(file);
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));}
+setupYears();
+</script>
+</div>
+</body>
+</html>
